@@ -21,8 +21,8 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git config user.email "ci@github"
-          git config user.name "GitHub Actions"
+          git config --global user.email "ci@github"
+          git config --global user.name "GitHub Actions"
           git lfs install
           cd backend
           git init

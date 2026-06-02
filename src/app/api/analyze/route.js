@@ -20,5 +20,6 @@ export async function POST(request) {
   const data = await response.json();
 
   // then, we get the result of the classification
-  return NextResponse.json(data);
+
+  return NextResponse.json(data, {status: response.status});
 }

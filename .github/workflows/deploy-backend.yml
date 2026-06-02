@@ -1,0 +1,32 @@
+name: Deploy Backend to HF Spaces
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push backend to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.email "ci@github"
+          git config user.name "GitHub Actions"
+          git lfs install
+          cd backend
+          git init
+          git lfs track "*.pkl" "*.safetensors"
+          git add .
+          git commit -m "Deploy from GitHub Actions"
+          git push --force https://shubhiu:$HF_TOKEN@huggingface.co/spaces/shubhiu/reframe-backend main

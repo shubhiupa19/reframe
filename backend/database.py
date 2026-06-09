@@ -33,6 +33,35 @@ def init_db(path=DATABASE_PATH):
                    notes TEXT
                    )"""
     )
+    # create the users table if it doesn't exist
+    cursor.execute(
+        """ CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        password_hash TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"""
+    )
+
+    # create the entries table if it doesn't exist
+    cursor.execute(
+        """ CREATE TABLE IF NOT EXISTS entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_text TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        user_id INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id))"""
+    )
+     # create the sentences table if it doesn't exist
+    cursor.execute(
+        """ CREATE TABLE IF NOT EXISTS sentences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        input TEXT,
+        prediction TEXT,
+        confidence DECIMAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        entry_id INTEGER,
+        FOREIGN KEY (entry_id) REFERENCES entries(id))"""
+    )
 
     # save the changes via
     conn.commit()

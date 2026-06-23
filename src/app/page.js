@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { DotsRing } from "@/components/loading-ui/dots-ring";
 import { DIST_STYLES, SAMPLE_TEXT } from "@/app/constants/distStyles";
 import HighlightedText from "@/components/HighlightedText";
 import Tooltip from "@/components/Tooltip";
@@ -212,13 +213,18 @@ export default function Home() {
                     onClick={analyzeText}
                     disabled={!text || loading}
                   >
-                    {loading ? "Analyzing..." : "Analyze →"}
+                    {loading ? <DotsRing className="size-4" /> : "Analyze →"}
                   </Button>
                 )}
                 {!backendReady && (
-                  <p className="text-[12px] text-muted-foreground">
-                    Warming up...
-                  </p>
+                  <Button
+                    className="py-5 px-4"
+                    disabled
+                    aria-label="Backend is getting ready"
+                  >
+                    <DotsRing className="size-4" />
+                    <span className="sr-only">Backend is getting ready</span>
+                  </Button>
                 )}
               </>
             )}

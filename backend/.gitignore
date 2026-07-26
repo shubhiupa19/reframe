@@ -1,0 +1,9 @@
+feedback.db
+
+.env.local
+
+__pycache__/
+
+.pytest_cache/
+
+models/distilbert-cognitive-distortions*

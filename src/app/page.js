@@ -366,7 +366,7 @@ export default function Home() {
       </main>
 
       <footer className="text-center px-6 py-8 text-[13px] italic text-muted-foreground">
-        Reframe is a journaling aid, not a clinical tool (~50% accuracy). Your
+        Reframe is a journaling aid, not a clinical tool (~68% accuracy). Your
         feedback helps improve predictions over time.
       </footer>
     </>

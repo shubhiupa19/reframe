@@ -6,4 +6,7 @@ __pycache__/
 
 .pytest_cache/
 
-models/distilbert-cognitive-distortions*
+models/distilbert-cognitive-distortions/
+
+models/distilbert-cognitive-distortions-improved/checkpoint-*
+models/distilbert-cognitive-distortions-improved/training_args.bin

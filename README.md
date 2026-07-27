@@ -20,7 +20,7 @@ Paste or type a journal entry. The app splits it into sentences and classifies e
 | Labeling | "I'm such an idiot" |
 | Should Statements | "I should be further along by now" |
 | Mental Filtering | "The whole day was ruined" |
-| Disqualifying the Positive | "That went well, but it was just luck" |
+| Magnification | "This mistake is going to ruin my entire career" |
 | Personalization | "It's my fault they're upset" |
 
 Each sentence is highlighted and color-coded by distortion type with confidence scores. Hover to see definitions.

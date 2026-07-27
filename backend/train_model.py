@@ -1,5 +1,5 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit
 from sklearn.linear_model import LogisticRegression
 from sentence_transformers import SentenceTransformer   
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
@@ -27,16 +27,27 @@ no_distortion = kaggle_df[kaggle_df["Dominant Distortion"]== "No Distortion"]
 has_distortion = kaggle_df[kaggle_df["Dominant Distortion"] != "No Distortion"]
 
 # for distortion rows, just grab the distorted sentence
-has_distortion_clean = has_distortion[["Distorted part", "Dominant Distortion"]]
+has_distortion_clean = has_distortion[["Distorted part", "Dominant Distortion"]].copy()
 has_distortion_clean.columns = ["text", "label"]
+# Each row here already comes from a distinct source paragraph (the "Distorted part"
+# span), so there's no shared-paragraph leakage risk — each gets its own group.
+has_distortion_clean["group"] = [f"has_distortion_{i}" for i in has_distortion_clean.index]
 
 # for no distortion, split each paragraph into sentences
 no_distortion_sentences = []
-for _, row in no_distortion.iterrows():
+for idx, row in no_distortion.iterrows():
     sentences = re.split(r'(?<=[.!?])\s+', row["Patient Question"].strip())
     for sentence in sentences:
         if sentence.strip():
-            no_distortion_sentences.append({"text": sentence.strip(), "label": "No Distortion"})
+            # Tag every sentence with the paragraph it came from so the train/test
+            # split can keep all of a paragraph's sentences on the same side —
+            # otherwise sentences from the same writer/story (overlapping
+            # vocabulary and tone) could land on both sides purely by chance.
+            no_distortion_sentences.append({
+                "text": sentence.strip(),
+                "label": "No Distortion",
+                "group": f"no_distortion_paragraph_{idx}",
+            })
 
 no_distortion_clean = pd.DataFrame(no_distortion_sentences)
 # Downsample "No Distortion" to ~400 to mitigate class imbalance
@@ -45,7 +56,10 @@ no_distortion_downsampled = no_distortion_clean.sample(n=400, random_state=42)
 # Store this downsample + rest of data in the primary df
 kaggle_clean_df = pd.concat([has_distortion_clean, no_distortion_downsampled])
 
-# combine with augmented data
+# combine with augmented data (each augmented example is its own group, same reasoning
+# as has_distortion_clean above)
+augmented_df = augmented_df.copy()
+augmented_df["group"] = [f"augmented_{i}" for i in augmented_df.index]
 df = pd.concat([kaggle_clean_df, augmented_df])
 
 # Load user feedback
@@ -54,21 +68,28 @@ if len(feedback_data) > 0:
     feedback_df = pd.DataFrame(
         feedback_data, columns=["text", "label"]
     )
+    feedback_df["group"] = [f"feedback_{i}" for i in feedback_df.index]
     df = pd.concat([df, feedback_df])
 
 
 # Prepare features and labels
 X = df["text"]
 y = df["label"]
+groups = df["group"]
 
 # load the encoder and encode everything (important for embeddings vs simple TF)
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
 X_encoded = encoder.encode(X.tolist(), show_progress_bar=True)
 
-# Train/test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X_encoded, y, test_size=0.2, random_state=42
-)
+# Train/test split — GroupShuffleSplit (instead of a plain random split) keeps every
+# sentence from the same source "No Distortion" paragraph on one side of the split,
+# so the test set is never evaluated on sentences whose vocabulary/tone the model
+# already saw in train via a sibling sentence from the same paragraph.
+splitter = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+train_idx, test_idx = next(splitter.split(X_encoded, y, groups=groups))
+
+X_train, X_test = X_encoded[train_idx], X_encoded[test_idx]
+y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
 
 # Train a Logistic Regression classifier on top of the sentence embeddings.
 # Instead of TF-IDF word frequency vectors, LogReg now receives 384-dimensional

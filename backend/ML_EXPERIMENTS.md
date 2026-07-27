@@ -13,38 +13,54 @@ iteration process in interviews — what was tried, why, what happened, and what
 
 ## 2. Data augmentation attempts
 
-- **Attempt 1 — downsample "No Distortion" to 200**: accuracy *dropped* to 18%
+- **Attempt 1 — downsample "No Distortion" to 200**: accuracy _dropped_ to 18%
   (1,797 total samples). Lesson: can't fix imbalance by just removing data when
   already data-starved overall — it just makes the dataset smaller.
 - **Fix — augment first, then downsample**: added AI-generated sentence-level
-  samples (1,529 rows in `augmented_data.csv`) to bulk up small classes, *then*
+  samples (1,529 rows in `augmented_data.csv`) to bulk up small classes, _then_
   downsampled "No Distortion" to 400. This became the standing data pipeline for
   every experiment after.
 - Also switched training examples from full paragraphs to individual sentences
   (matches how the model is actually used at inference time — sentence by
-  sentence). Concretely: paragraphs *with* a distortion contribute one row each
+  sentence). Concretely: paragraphs _with_ a distortion contribute one row each
   (just the `Distorted part` span — a column the Kaggle dataset itself provides,
-  not something this code derives) → 1,597 rows. Paragraphs with *no* distortion
+  not something this code derives) → 1,597 rows. Paragraphs with _no_ distortion
   get exploded into individual sentences (6,536 of them), all labeled "No
   Distortion," then downsampled to 400. Final training set:
   1,597 + 400 + 1,529 (augmented) = **3,526 rows**, plus whatever user feedback
   has accumulated at retrain time. (The raw "2,530" figure from the baseline
   above is paragraph count, not final row count — the two are easy to conflate
   since sentence-splitting wasn't introduced until this step.)
-- **Known caveat — data leakage risk (not fixed as of this writing)**: the
-  paragraph→sentence split happens *before* `train_test_split`, and that split
-  is random at the sentence level, not grouped by source paragraph. A "No
-  Distortion" paragraph can contribute several sentences (same writer, same
-  story, overlapping vocabulary/tone) — some of those can land in train, others
-  in test, purely by chance. This isn't the model overfitting; it's the *test
-  set* not being fully independent of train for that one class, which likely
-  makes "No Distortion" accuracy look somewhat better than it would on truly
-  unseen writing. Rows with a distortion label don't have this problem — each
-  paragraph contributes exactly one row (the `Distorted part` span), so no
-  group can span both train and test. Fix would be a paragraph-grouped split
-  (`GroupShuffleSplit` keyed on a paragraph id) instead of a random one —
-  deferred for now since the affected slice (400 of 3,526 rows) is a minority
-  of the data.
+- **Data leakage risk — fixed (2026-07-26)**: the paragraph→sentence split
+  happens _before_ the train/test split, and a "No Distortion" paragraph can
+  contribute several sentences (same writer, same story, overlapping
+  vocabulary/tone). A plain random split could land some of those sentences in
+  train and others in test purely by chance — not the model overfitting, but
+  the _test set_ not being fully independent of train for that one class.
+  Rows with a distortion label were never at risk (each paragraph contributes
+  exactly one row, the `Distorted part` span), so only the ~400 "No
+  Distortion" sentence rows were exposed.
+  - **Fix**: both `train_model.py` and `train_distilbert.py` now tag every row
+    with a `group` (the source paragraph id for "No Distortion" sentences;
+    a unique id per row for everything else, since those rows were never at
+    risk) and split with `GroupShuffleSplit` keyed on that group, instead of a
+    plain random/stratified split. Verified directly: after the split, the set
+    of groups in train and the set of groups in test/holdout have zero
+    overlap.
+  - **Tradeoff**: `GroupShuffleSplit` doesn't support `stratify`, so the
+    resulting test/validation sets no longer have exactly even class counts
+    (`train_distilbert.py`'s post-fix test set ranged from 18 to 44 examples
+    per class, vs. a roughly even ~32 before). This means run-to-run accuracy
+    is noisier than before — see section 7 for what this looked like in
+    practice.
+  - **Did it actually change "No Distortion" accuracy?** Not meaningfully.
+    Comparing the affected class specifically: 0.69 f1 before the fix vs. 0.70
+    f1 after (`train_distilbert.py`, section 7). If leakage had been
+    materially propping that number up, fixing it should have dropped it
+    noticeably — it didn't. The fix was still worth doing (it closes a real
+    methodological gap and the risk was structural, not something you'd want
+    to just eyeball away), but the leakage doesn't appear to have been a big
+    driver of the reported numbers in practice.
 
 ## 3. Tried SVM
 
@@ -60,10 +76,14 @@ iteration process in interviews — what was tried, why, what happened, and what
   Semantic embeddings capture meaning similarity that raw word-frequency vectors can't
   (e.g. "I always ruin everything" and "Nothing I do ever works out" land close together
   even with zero shared words).
-- This became the model actually deployed to production (`train_model.py` /
-  `distortion_model.pkl`).
+- This was the model deployed to production for a while (`train_model.py` /
+  `distortion_model.pkl`), until the fine-tuned DistilBERT model (section 7) replaced
+  it in `app.py` on 2026-07-26.
+- **Re-run after the `GroupShuffleSplit` leakage fix (2026-07-26)**: 49.64% accuracy,
+  699 test rows — consistent with the pre-fix ~49% number, same conclusion as section 2:
+  the leakage wasn't a major driver of the reported accuracy.
 - **Mental model worth keeping**: MiniLM "manicures" the text into a shaped,
-  comparable form (the 384-dim vector) as a separate, one-time step, *before*
+  comparable form (the 384-dim vector) as a separate, one-time step, _before_
   LogisticRegression ever sees it or the 11 labels. LogisticRegression can only
   draw dividing lines through whatever shape it's handed — it has no way to
   ask for the data to be reshaped. That framing is why the next several
@@ -72,11 +92,11 @@ iteration process in interviews — what was tried, why, what happened, and what
 
 ## 5. Hyperparameter tuning (GridSearchCV) — three rounds, all near-identical results
 
-| Round | What was swept | Best params | Best score |
-|---|---|---|---|
-| 1 | `C` only, no scaling | `C=10.0` | 48.39% macro F1 |
-| 2 | `C` only, with `StandardScaler` added before LR | `C=0.01` | 49.18% macro F1 |
-| 3 | `C` × `penalty` (l1/l2) × `solver` (lbfgs/saga) | `C=0.01, penalty=l2, solver=saga` | 49.22% macro F1 |
+| Round | What was swept                                  | Best params                       | Best score      |
+| ----- | ----------------------------------------------- | --------------------------------- | --------------- |
+| 1     | `C` only, no scaling                            | `C=10.0`                          | 48.39% macro F1 |
+| 2     | `C` only, with `StandardScaler` added before LR | `C=0.01`                          | 49.18% macro F1 |
+| 3     | `C` × `penalty` (l1/l2) × `solver` (lbfgs/saga) | `C=0.01, penalty=l2, solver=saga` | 49.22% macro F1 |
 
 - Notable: adding `StandardScaler` flipped the best `C` from 10.0 to 0.01 — a good
   illustration of why L2 regularization strength is scale-dependent (unscaled
@@ -105,6 +125,10 @@ iteration process in interviews — what was tried, why, what happened, and what
 
 ## 7. Fine-tuned DistilBERT
 
+- **Implementation**: `train_distilbert.py` reproduces this experiment and saves the
+  fine-tuned model, tokenizer, and label mappings under
+  `models/distilbert-cognitive-distortions-improved/` (generated artifacts are
+  gitignored).
 - Instead of frozen embeddings + a separate classifier, fine-tuned DistilBERT
   end-to-end on the same dataset.
 - **Reproduced locally to verify the claim**: re-implemented the same approach
@@ -112,13 +136,40 @@ iteration process in interviews — what was tried, why, what happened, and what
   as every other experiment) and fine-tuned on Apple Silicon (MPS). **Result: 63.88%
   accuracy** — confirms the original claim was real and reproducible, not a stale/
   inflated note.
+- **Improved reproducible run**: the committed script now deduplicates exact examples,
+  uses stratified 80/10/10 train/validation/test splits, trains for up to 6 epochs with
+  warmup, weight decay, label smoothing, and early stopping, and selects checkpoints by
+  validation macro F1. The best checkpoint was epoch 4. **Untouched test result: 65.62%
+  accuracy and 65.82% macro F1** (352 examples). Validation peaked at 66.48% accuracy
+  and 66.42% macro F1. This is the preferred result because the final test set is no
+  longer also used for checkpoint selection.
+- **Re-run after the `GroupShuffleSplit` leakage fix (2026-07-26)**: swapped the
+  stratified `train_test_split` above for a group-aware split keyed on source paragraph
+  (see section 2). **Test result: 68.27% accuracy, 69.20% macro F1** (353 examples, best
+  checkpoint at step 528/1056). This is *higher* than the pre-fix run, not lower —
+  worth being precise about why: `GroupShuffleSplit` doesn't support `stratify`, so this
+  test set has uneven class counts (18–44 examples per class) instead of the previous
+  even split, and a smaller/uneven test set carries more run-to-run variance on its own.
+  The one number that actually isolates the leakage effect — "No Distortion" f1, the
+  only class that was ever at risk — barely moved (0.69 → 0.70), which suggests the
+  leakage wasn't a meaningful driver of the reported score either way. Both numbers
+  above are legitimate; the post-fix one is simply the more methodologically sound of
+  the two.
 - **By far the best result across every experiment** — every class landed at f1 ≥ 0.48
-  (vs. several classes stuck around 0.3 with frozen embeddings). Strongest: Should
-  statements (0.82), Fortune-telling (0.69), No Distortion (0.69), Mental filter (0.71).
-  Weakest: Magnification (0.48), Personalization (0.51) — still the two hardest classes,
-  but meaningfully improved from the frozen-embedding approach.
-- **Not yet in production** — would require swapping `app.py`'s inference path and
-  handling a much larger model (~260MB) at deploy time.
+  (vs. several classes stuck around 0.3 with frozen embeddings). In the post-fix run,
+  strongest: Should statements (0.81), Labeling (0.75), All-or-nothing thinking (0.75),
+  Mental filter (0.74). Weakest: Magnification (0.55), Emotional Reasoning (0.61) —
+  still among the hardest classes, but meaningfully improved from the frozen-embedding
+  approach either way.
+- **Deployed to production (2026-07-26)** — `app.py` now loads this model via a
+  Hugging Face `pipeline("text-classification", ...)`, replacing the SentenceTransformer
+  + LogisticRegression path from section 4. `backend/.gitignore` was narrowed so the
+  deploy workflow (which does a fresh `git init` + `git add .` inside `backend/` and
+  pushes to the HF Space) actually includes `config.json`, `model.safetensors`,
+  `tokenizer.json`, and `tokenizer_config.json` — it previously blanket-ignored the
+  whole model folder, which would have silently kept the fine-tuned model out of every
+  deploy. Training checkpoints (`checkpoint-*/`, up to 767MB each) stay excluded, since
+  only the final `save_model()` output is needed for inference.
 - **Why this jump makes sense**: end-to-end fine-tuning lets the transformer's own
   representations adapt specifically to this classification task, instead of relying on
   generic sentence-similarity embeddings that were never trained with these 11 labels
@@ -168,9 +219,10 @@ iteration process in interviews — what was tried, why, what happened, and what
    solver, feature scaling, embedding model size) all independently converged on the
    same ~48–50% ceiling — a clear signal that further gains need a different kind of
    change, not more tuning of the same setup.
-3. Fine-tuning the transformer itself broke through that ceiling (63.88%),
-   consistent with the idea that generic frozen embeddings, however good, aren't as
-   informative as representations learned specifically for this task.
-4. Next real lever isn't more GridSearchCV — it's either deploying the fine-tuned
-   DistilBERT model, or further targeted data collection/augmentation for the
-   worst-performing classes (Magnification, Emotional Reasoning, Overgeneralization).
+3. Fine-tuning the transformer itself broke through that ceiling (63.88%, later
+   68.27% after fixing the paragraph-leakage split — see section 7), consistent with
+   the idea that generic frozen embeddings, however good, aren't as informative as
+   representations learned specifically for this task. This model is what's actually
+   deployed now.
+4. Next real lever isn't more GridSearchCV — it's targeted data collection/
+   augmentation for the worst-performing classes (Magnification, Emotional Reasoning).

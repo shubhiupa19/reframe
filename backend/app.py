@@ -1,12 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import joblib
 import traceback
 import re
 from database import save_feedback, init_db
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from sentence_transformers import SentenceTransformer
+from transformers import pipeline
 import os
 import google.generativeai as genai                                                                                                                                                                                                                              
 from dotenv import load_dotenv
@@ -28,10 +27,12 @@ init_db()
 # get API key for cross checking with frontend requests
 API_KEY = os.environ.get("API_KEY")
 
-# Load the trained model
-model = joblib.load(os.path.join(os.path.dirname(__file__), "distortion_model.pkl"))
-
-encoder = SentenceTransformer(os.path.join(os.path.dirname(__file__), "models/all-MiniLM-L6-v2"))
+# Load the fine-tuned DistilBERT model (see backend/train_distilbert.py)
+classifier = pipeline(
+    "text-classification",
+    model=os.path.join(os.path.dirname(__file__), "models/distilbert-cognitive-distortions-improved"),
+    top_k=None,
+)
 
 # route to call the model and predict CD's for each sentence
 @app.route("/predict", methods=["POST"])
@@ -50,22 +51,20 @@ def predict():
         sentences = re.split(r'(?<=[.!?])\s+', input_text.strip())
         sentences = [s.strip() for s in sentences if s.strip()]
 
-        # create embeddings from the input sentences
-        embeddings = encoder.encode(sentences)
+        # Run all sentences through the DistilBERT classifier in one batched call
+        predictions = classifier(sentences, truncation=True, max_length=256)
+
         # Make predictions for each sentence
         results = []
-        for i in range (len(sentences)):
-            prediction = model.predict([embeddings[i]])[0]
-            probs = model.predict_proba([embeddings[i]])[0]
-
-            # Get confidence for the predicted class
-            class_index = list(model.classes_).index(prediction)
-            confidence = float(probs[class_index])
+        for i in range(len(sentences)):
+            # top_k=None returns every class's score, sorted highest first
+            top_prediction = predictions[i][0]
+            confidence = float(top_prediction["score"])
 
             if confidence > 0.2:
                 results.append({
                     "input": sentences[i],
-                    "prediction": prediction,
+                    "prediction": top_prediction["label"],
                     "confidence": round(confidence, 3)
                 })
 
@@ -175,7 +174,7 @@ def agent():
 
 @app.route('/health', methods=["GET"])
 def health():
-    encoder.encode(["warmup"])
+    classifier(["warmup"])
     return jsonify({"status": "ok"})
 
 

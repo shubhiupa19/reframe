@@ -65,8 +65,8 @@ def test_feedbacK_text_too_long(client):
     assert result["error"] == "Sentence is too long for feedback"
 
 def test_predict_model_error(client):
-    with patch('app.model') as mock_model:
-        mock_model.predict.side_effect = Exception("Model Crashed")
+    with patch('app.classifier') as mock_classifier:
+        mock_classifier.side_effect = Exception("Model Crashed")
         response = client.post("/predict", json={"text": "sample sentence"})
         assert response.status_code == 500
 

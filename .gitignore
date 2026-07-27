@@ -52,6 +52,9 @@ ENV/
 *.egg-info/
 .pytest_cache/
 
+# Fine-tuned model checkpoints are generated locally and are hundreds of MB.
+/backend/models/distilbert-cognitive-distortions*/
+
 # 
 CLAUDE.md
 

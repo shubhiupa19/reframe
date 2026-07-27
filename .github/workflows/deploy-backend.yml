@@ -17,6 +17,16 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      - name: Fetch fine-tuned DistilBERT weights
+        run: |
+          mkdir -p backend/models/distilbert-cognitive-distortions-improved
+          base="https://huggingface.co/shubhiu/reframe-distilbert-cognitive-distortions/resolve/main"
+          cd backend/models/distilbert-cognitive-distortions-improved
+          curl -sSL -f -o config.json "$base/config.json"
+          curl -sSL -f -o model.safetensors "$base/model.safetensors"
+          curl -sSL -f -o tokenizer.json "$base/tokenizer.json"
+          curl -sSL -f -o tokenizer_config.json "$base/tokenizer_config.json"
+
       - name: Push backend to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}

@@ -37,10 +37,10 @@ Built at the intersection of NLP and clinical psychology, this project is an exp
 
 ## Tech stack
 
-**Frontend:** Next.js 16 (App Router), React 19, Tailwind CSS v4  
-**Backend:** Flask, scikit-learn, sentence-transformers, pandas  
-**Model:** `all-MiniLM-L6-v2` sentence embeddings + Logistic Regression trained on ~3,500 labeled examples  
-**Dataset:** [Cognitive Distortion Detection Dataset](https://www.kaggle.com/) + AI-augmented samples — 11 classes, 80/20 stratified split
+**Frontend:** Next.js 16 (App Router), React 19, Tailwind CSS v4
+**Backend:** Flask, Hugging Face `transformers`, PyTorch
+**Model:** fine-tuned `distilbert-base-uncased`, trained end-to-end on ~3,500 labeled sentence-level examples across 11 classes (10 distortions + "No Distortion")
+**Dataset:** [Cognitive Distortion Detection Dataset](https://www.kaggle.com/datasets/sagarikashreevastava/cognitive-distortion-detetction-dataset) (Kaggle) + LLM-augmented samples for underrepresented classes, grouped 80/10/10 train/validation/test split
 
 ---
 
@@ -48,18 +48,19 @@ Built at the intersection of NLP and clinical psychology, this project is an exp
 
 ```bash
 # Clone the repo
-git clone https://github.com/shubhiupa19/journal-ai.git
-cd journal-ai
+git clone https://github.com/shubhiupa19/reframe.git
+cd reframe
 
 # Backend setup
 cd backend
 pip install -r requirements.txt
-python train_model.py   # trains and saves distortion_model.pkl
-python app.py           # runs on http://127.0.0.1:5000
+python app.py            # runs on http://127.0.0.1:5001
+                          # fetches the fine-tuned DistilBERT weights from the
+                          # public Hugging Face Hub model repo on first run
 
 # Frontend setup (new terminal)
 npm install
-npm run dev             # runs on http://localhost:3000
+npm run dev               # runs on http://localhost:3000
 ```
 
 ---
@@ -68,17 +69,17 @@ npm run dev             # runs on http://localhost:3000
 
 This is an actively developed project. Upcoming:
 
-- **Fine-tuned transformer** — fine-tuning DistilBERT/RoBERTa for context-aware classification (target: 65%+ accuracy)
-- **Agentic reframing** — tool-use layer that generates CBT-style reframes for flagged sentences using therapist response data from the original dataset
-- **Memory + personalization** — tracking distortion patterns over time to surface recurring thought patterns
-- **ReAct reasoning** — multi-step agent that selects interventions based on distortion type and severity
+- **Multi-label classification** — letting a sentence carry more than one distortion at once, instead of forcing a single label (the dataset's own secondary-distortion annotations show real sentences often exhibit more than one)
 - **Session history** — persistent journaling with longitudinal pattern analysis
+- **Agentic reframing** — tool-use layer that generates CBT-style reframes for flagged sentences using therapist response data from the original dataset
+
+See `backend/ML_EXPERIMENTS.md` for the full experiment log behind the model.
 
 ---
 
 ## Current limitations
 
-Classification accuracy is ~50% on the held-out test set — best treated as a journaling aid that surfaces patterns for reflection, not a clinical diagnostic tool. Some distortion types (Magnification, Overgeneralization) are harder to distinguish and score lower individually.
+Classification accuracy is 68.27% (69.2% macro F1) on a held-out, paragraph-grouped test set, best treated as a journaling aid that surfaces patterns for reflection, not a clinical diagnostic tool. Some distortion types (Magnification, Emotional Reasoning) are harder to distinguish from each other and score lower individually. The model currently assigns exactly one distortion per sentence, even though some sentences genuinely exhibit more than one.
 
 ---
 

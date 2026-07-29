@@ -1,42 +1,0 @@
-Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 8606.19it/s]
-Batches:   0%|          | 0/111 [00:00<?, ?it/s]Batches:   1%|          | 1/111 [00:01<02:47,  1.52s/it]Batches:   2%|▏         | 2/111 [00:01<01:36,  1.13it/s]Batches:   3%|▎         | 3/111 [00:02<01:02,  1.74it/s]Batches:   4%|▎         | 4/111 [00:02<00:46,  2.30it/s]Batches:   5%|▍         | 5/111 [00:02<00:41,  2.56it/s]Batches:   5%|▌         | 6/111 [00:02<00:34,  3.00it/s]Batches:   6%|▋         | 7/111 [00:03<00:39,  2.64it/s]Batches:   7%|▋         | 8/111 [00:03<00:39,  2.63it/s]Batches:   8%|▊         | 9/111 [00:03<00:33,  3.02it/s]Batches:   9%|▉         | 10/111 [00:04<00:26,  3.82it/s]Batches:  11%|█         | 12/111 [00:04<00:18,  5.37it/s]Batches:  12%|█▏        | 13/111 [00:04<00:19,  5.12it/s]Batches:  13%|█▎        | 14/111 [00:04<00:17,  5.47it/s]Batches:  14%|█▎        | 15/111 [00:04<00:15,  6.04it/s]Batches:  14%|█▍        | 16/111 [00:04<00:15,  6.04it/s]Batches:  17%|█▋        | 19/111 [00:05<00:09,  9.41it/s]Batches:  19%|█▉        | 21/111 [00:05<00:09,  9.30it/s]Batches:  21%|██        | 23/111 [00:05<00:08, 10.61it/s]Batches:  23%|██▎       | 25/111 [00:05<00:07, 12.18it/s]Batches:  24%|██▍       | 27/111 [00:05<00:07, 11.54it/s]Batches:  26%|██▌       | 29/111 [00:05<00:06, 13.07it/s]Batches:  28%|██▊       | 31/111 [00:06<00:05, 13.61it/s]Batches:  30%|██▉       | 33/111 [00:06<00:05, 15.02it/s]Batches:  32%|███▏      | 36/111 [00:06<00:04, 16.28it/s]Batches:  34%|███▍      | 38/111 [00:06<00:04, 15.45it/s]Batches:  36%|███▌      | 40/111 [00:06<00:06, 11.54it/s]Batches:  39%|███▊      | 43/111 [00:06<00:04, 14.99it/s]Batches:  41%|████      | 45/111 [00:06<00:04, 15.86it/s]Batches:  42%|████▏     | 47/111 [00:07<00:04, 15.03it/s]Batches:  45%|████▌     | 50/111 [00:07<00:03, 17.50it/s]Batches:  47%|████▋     | 52/111 [00:07<00:03, 17.94it/s]Batches:  49%|████▊     | 54/111 [00:07<00:03, 16.94it/s]Batches:  51%|█████▏    | 57/111 [00:07<00:03, 17.71it/s]Batches:  54%|█████▍    | 60/111 [00:07<00:02, 19.60it/s]Batches:  58%|█████▊    | 64/111 [00:07<00:02, 23.06it/s]Batches:  62%|██████▏   | 69/111 [00:07<00:01, 29.23it/s]Batches:  66%|██████▌   | 73/111 [00:08<00:01, 29.32it/s]Batches:  69%|██████▉   | 77/111 [00:08<00:01, 31.29it/s]Batches:  73%|███████▎  | 81/111 [00:08<00:01, 29.31it/s]Batches:  77%|███████▋  | 85/111 [00:08<00:00, 29.42it/s]Batches:  80%|████████  | 89/111 [00:08<00:01, 20.51it/s]Batches:  83%|████████▎ | 92/111 [00:08<00:00, 21.88it/s]Batches:  86%|████████▋ | 96/111 [00:09<00:00, 24.78it/s]Batches:  89%|████████▉ | 99/111 [00:09<00:00, 24.43it/s]Batches:  92%|█████████▏| 102/111 [00:09<00:00, 21.15it/s]Batches:  96%|█████████▋| 107/111 [00:09<00:00, 17.23it/s]Batches:  99%|█████████▉| 110/111 [00:10<00:00,  8.04it/s]Batches: 100%|██████████| 111/111 [00:11<00:00, 10.00it/s]
-
-Overall Accuracy: 49.01%
-
-Training set size: 2820
-Test set size: 706
-
-Class distribution in test set:
-label
-All-or-nothing thinking    64
-Emotional Reasoning        61
-Fortune-telling            52
-Labeling                   56
-Magnification              68
-Mental filter              57
-Mind Reading               73
-No Distortion              80
-Overgeneralization         80
-Personalization            62
-Should statements          53
-Name: count, dtype: int64
-Classification Report:
-                         precision    recall  f1-score   support
-
-All-or-nothing thinking       0.50      0.36      0.42        64
-    Emotional Reasoning       0.40      0.36      0.38        61
-        Fortune-telling       0.48      0.48      0.48        52
-               Labeling       0.55      0.62      0.58        56
-          Magnification       0.42      0.32      0.37        68
-          Mental filter       0.52      0.63      0.57        57
-           Mind Reading       0.45      0.63      0.52        73
-          No Distortion       0.55      0.60      0.57        80
-     Overgeneralization       0.43      0.30      0.35        80
-        Personalization       0.44      0.44      0.44        62
-      Should statements       0.63      0.72      0.67        53
-
-               accuracy                           0.49       706
-              macro avg       0.49      0.50      0.49       706
-           weighted avg       0.48      0.49      0.48       706
-
-Model successfully saved!

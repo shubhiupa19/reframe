@@ -55,9 +55,19 @@ ENV/
 # Fine-tuned model checkpoints are generated locally and are hundreds of MB.
 /backend/models/distilbert-cognitive-distortions*/
 
-# 
+# Generated locally by scripts in backend/ — regenerate by rerunning them, not committed.
+feedback.db
+backend/distortion_model.pkl
+backend/train_output.txt
+
+# personal planning docs, not part of the app
 CLAUDE.md
 
 roadmap.md
 
 UI.md
+
+TODO.md
+
+# personal writing drafts, not part of the app
+/writing/

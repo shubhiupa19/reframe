@@ -1,8 +1,7 @@
 """Fine-tune DistilBERT for cognitive-distortion classification.
 
 This is the reproducible implementation of experiment 7 in ML_EXPERIMENTS.md.
-It intentionally does not replace the MiniLM + LogisticRegression production path
-in app.py. The trained tokenizer, model, and label mappings are saved together in
+This is the fourth iteration of the ML pipeline, currently deployed in app.py, replacing earlier MiniLM + LogisticRegression pipeline. The trained tokenizer, model, and label mappings are saved together in
 Hugging Face's ``save_pretrained`` format so they can be loaded for inference later.
 
 Run from any directory:

@@ -1,65 +1,32 @@
-from sklearn.model_selection import GridSearchCV
-import pandas as pd
-import re
+from sklearn.model_selection import GridSearchCV, GroupShuffleSplit, GroupKFold
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sentence_transformers import SentenceTransformer
 
+from data_prep import build_training_dataset
 
-# Load Kaggle dataset
-kaggle_df = pd.read_csv("cognitive_distortion_dataset.csv")
-
-# Drop empty rows and any without a dominant distortion label
-kaggle_df = kaggle_df.dropna(subset=["Patient Question", "Dominant Distortion"])
-
-# load augmented data (AI-genereated)
-augmented_df = pd.read_csv("augmented_data.csv")
-
-
-
-
-# Split into no distortion vs distortion
-no_distortion = kaggle_df[kaggle_df["Dominant Distortion"]== "No Distortion"]
-has_distortion = kaggle_df[kaggle_df["Dominant Distortion"] != "No Distortion"]
-
-# for distortion rows, just grab the distorted sentence
-has_distortion_clean = has_distortion[["Distorted part", "Dominant Distortion"]]
-has_distortion_clean.columns = ["text", "label"]
-
-# for no distortion, split each paragraph into sentences
-no_distortion_sentences = []
-for _, row in no_distortion.iterrows():
-    sentences = re.split(r'(?<=[.!?])\s+', row["Patient Question"].strip())
-    for sentence in sentences:
-        if sentence.strip():
-            no_distortion_sentences.append({"text": sentence.strip(), "label": "No Distortion"})
-
-no_distortion_clean = pd.DataFrame(no_distortion_sentences)
-# Downsample "No Distortion" to ~400 to mitigate class imbalance
-no_distortion_downsampled = no_distortion_clean.sample(n=400, random_state=42)
-
-# Store this downsample + rest of data in the primary df
-kaggle_clean_df = pd.concat([has_distortion_clean, no_distortion_downsampled])
-
-# combine with augmented data
-df = pd.concat([kaggle_clean_df, augmented_df])
+df, _ = build_training_dataset(include_feedback=False)
 
 # Prepare features and labels
 X = df["text"]
 y = df["label"]
+groups = df["group"]
 
 # load the encoder and encode everything (important for embeddings vs simple TF)
-# this must match train_model.py's approach so tuning results transfer to the real model
+# this must match train_embeddings_lr.py's approach so tuning results transfer to the real model
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
 X_encoded = encoder.encode(X.tolist(), show_progress_bar=True)
 
-# Train/test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X_encoded, y, test_size=0.2, random_state=42
-)
+# Train/test split — GroupShuffleSplit (instead of a plain random split) keeps every
+# sentence from the same source "No Distortion" paragraph on one side, matching the
+# leakage fix used in train_embeddings_lr.py.
+splitter = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+train_idx, test_idx = next(splitter.split(X_encoded, y, groups=groups))
+
+X_train, X_test = X_encoded[train_idx], X_encoded[test_idx]
+y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+groups_train = groups.iloc[train_idx]
 
 # Pipeline: scale the raw embeddings first, then feed them to Logistic Regression.
 # SentenceTransformer embeddings aren't normalized/scaled by default, and LogReg's
@@ -103,8 +70,13 @@ param_grid = [
     },
 ]
 
-grid_search = GridSearchCV(pipeline, param_grid, cv=5, scoring='f1_macro', verbose=2)
-grid_search.fit(X_train, y_train)
+# GroupKFold (instead of the default integer cv, which is a plain KFold) keeps every
+# sentence from the same source paragraph together within each cross-validation fold,
+# not just in the outer train/test split above — otherwise a fold could still evaluate
+# on "No Distortion" sentences whose sibling from the same paragraph was in that fold's
+# training portion.
+grid_search = GridSearchCV(pipeline, param_grid, cv=GroupKFold(n_splits=5), scoring='f1_macro', verbose=2)
+grid_search.fit(X_train, y_train, groups=groups_train)
 
 print(f"Best parameters: {grid_search.best_params_}")
 print(f"Best F1 score: {grid_search.best_score_:.2%}")

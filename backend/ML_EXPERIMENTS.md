@@ -40,7 +40,7 @@ iteration process in interviews — what was tried, why, what happened, and what
   Rows with a distortion label were never at risk (each paragraph contributes
   exactly one row, the `Distorted part` span), so only the ~400 "No
   Distortion" sentence rows were exposed.
-  - **Fix**: both `train_model.py` and `train_distilbert.py` now tag every row
+  - **Fix**: both `train_embeddings_lr.py` and `train_distilbert.py` now tag every row
     with a `group` (the source paragraph id for "No Distortion" sentences;
     a unique id per row for everything else, since those rows were never at
     risk) and split with `GroupShuffleSplit` keyed on that group, instead of a
@@ -76,7 +76,7 @@ iteration process in interviews — what was tried, why, what happened, and what
   Semantic embeddings capture meaning similarity that raw word-frequency vectors can't
   (e.g. "I always ruin everything" and "Nothing I do ever works out" land close together
   even with zero shared words).
-- This was the model deployed to production for a while (`train_model.py` /
+- This was the model deployed to production for a while (`train_embeddings_lr.py` /
   `distortion_model.pkl`), until the fine-tuned DistilBERT model (section 7) replaced
   it in `app.py` on 2026-07-26.
 - **Re-run after the `GroupShuffleSplit` leakage fix (2026-07-26)**: 49.64% accuracy,
@@ -193,7 +193,7 @@ iteration process in interviews — what was tried, why, what happened, and what
 
 ## 8. Planned: recall-weighted scoring metric (not yet run)
 
-- **Decision (2026-07-15)**: `tune_model.py`'s `GridSearchCV` currently scores on
+- **Decision (2026-07-15)**: `tune_embeddings_lr.py`'s `GridSearchCV` currently scores on
   `f1_macro`, which weighs precision and recall equally. For this app, missing a
   real distortion (false negative) is worse than flagging a sentence that isn't
   actually distorted (false positive) — the whole point of the tool is
@@ -209,6 +209,28 @@ iteration process in interviews — what was tried, why, what happened, and what
   — a mild lean toward recall, not the aggressive `beta=2` convention.
 - Not yet run. Once done, this section should be updated with the actual best
   params and score, same as sections 5 and 6.
+
+## 9. Fixed: tuning script had drifted out of sync with the leakage fix
+
+- **Found (2026-07-28)**: while extracting the data-loading logic shared by
+  `train_embeddings_lr.py` and `tune_embeddings_lr.py` into a common
+  `data_prep.py`, noticed `tune_embeddings_lr.py` had never been updated
+  alongside the group-aware leakage fix in section 2 — it still tagged no
+  rows with a `group` and used a plain `train_test_split` plus a plain
+  integer `cv` (regular `KFold`) inside `GridSearchCV`.
+- **Fix**: `tune_embeddings_lr.py` now uses the same `GroupShuffleSplit` for
+  its outer train/test split, and `GroupKFold` (instead of a bare integer)
+  for `GridSearchCV`'s internal cross-validation, so a paragraph's sentences
+  can no longer end up split across CV folds either.
+- **Re-run with the fix (2026-07-28)**: `train_embeddings_lr.py` reproduced its
+  documented post-leakage-fix result exactly (49.64% accuracy, 699 test rows),
+  confirming the refactor didn't change its behavior. `tune_embeddings_lr.py`'s
+  `GridSearchCV` with the new `GroupShuffleSplit`/`GroupKFold` came back with
+  **best parameters `C=0.01, penalty=l2, solver=saga`, F1 49.14%** — the same
+  best combination as the pre-fix round 3 result in section 5 (49.22%), a
+  ~0.08-point difference well within normal run-to-run noise. As expected given
+  how little the leakage fix moved anything else in this project, fixing the
+  tuning script's methodology didn't change its conclusion either.
 
 ## Overall narrative
 

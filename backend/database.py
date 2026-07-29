@@ -1,168 +1,105 @@
-import sqlite3
+import os
 
-DATABASE_PATH = "feedback.db"
+from supabase import create_client
+
+_client = None
 
 
-def init_db(path=DATABASE_PATH):
-    # create a connection to the db
-    conn = sqlite3.connect(path)
+def _get_client():
+    # Created lazily (not at import time) so importing this module doesn't
+    # require SUPABASE_URL/SUPABASE_KEY to already be set — e.g. load_dotenv()
+    # in app.py runs before any of these functions are actually called.
+    global _client
+    if _client is None:
+        _client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    return _client
 
-    # create cursor
-    cursor = conn.cursor()
 
-    # create feedback table if it doesn't exist
-    cursor.execute(
-        """ CREATE TABLE IF NOT EXISTS feedback (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                   text TEXT NOT NULL,
-                   predicted_distortion TEXT, 
-                   user_correction TEXT, 
-                   is_accepted BOOLEAN,
-                   confidence REAL,
-                   timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                   used_in_training BOOLEAN DEFAULT FALSE)
-                   """
+def init_db():
+    # No-op: table creation is a one-time setup step done through Supabase's
+    # own SQL Editor, not something supabase-py's client library supports at
+    # runtime (it only does data operations — insert/select/update — not DDL
+    # like CREATE TABLE, unlike the sqlite3 version this replaced).
+    pass
+
+
+def save_feedback(text, predicted_distortion, user_correction, is_accepted, confidence) -> int:
+    supabase = _get_client()
+    result = (
+        supabase.table("feedback")
+        .insert(
+            {
+                "text": text,
+                "predicted_distortion": predicted_distortion,
+                "user_correction": user_correction,
+                "is_accepted": is_accepted,
+                "confidence": confidence,
+            }
+        )
+        .execute()
     )
-    # create model_versions table if it doesn't exist
-    cursor.execute(
-        """ CREATE TABLE IF NOT EXISTS model_versions (
-                   id INTEGER PRIMARY KEY AUTOINCREMENT,
-                   version_number INTEGER,
-                   training_samples INTEGER,
-                   accuracy REAL,
-                   notes TEXT
-                   )"""
+    return result.data[0]["id"]
+
+
+def save_prediction(submission_id, input_text, prediction, confidence):
+    supabase = _get_client()
+    supabase.table("predictions").insert(
+        {
+            "submission_id": submission_id,
+            "input": input_text,
+            "prediction": prediction,
+            "confidence": confidence,
+        }
+    ).execute()
+
+
+def get_training_feedback():
+    supabase = _get_client()
+    result = (
+        supabase.table("feedback")
+        .select("text, user_correction")
+        .eq("is_accepted", False)
+        .eq("used_in_training", False)
+        .execute()
     )
-    # create the users table if it doesn't exist
-    cursor.execute(
-        """ CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT,
-        password_hash TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"""
+    return [(row["text"], row["user_correction"]) for row in result.data]
+
+
+def mark_used_feedback():
+    supabase = _get_client()
+    supabase.table("feedback").update({"used_in_training": True}).eq("used_in_training", False).execute()
+
+
+def save_model_version(version_number, training_samples, accuracy, notes):
+    supabase = _get_client()
+    result = (
+        supabase.table("model_versions")
+        .insert(
+            {
+                "version_number": version_number,
+                "training_samples": training_samples,
+                "accuracy": accuracy,
+                "notes": notes,
+            }
+        )
+        .execute()
     )
+    return result.data[0]["id"]
 
-    # create the entries table if it doesn't exist
-    cursor.execute(
-        """ CREATE TABLE IF NOT EXISTS entries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        entry_text TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        user_id INTEGER,
-        FOREIGN KEY (user_id) REFERENCES users(id))"""
+
+def get_latest_version():
+    supabase = _get_client()
+    result = (
+        supabase.table("model_versions")
+        .select("version_number")
+        .order("version_number", desc=True)
+        .limit(1)
+        .execute()
     )
-     # create the sentences table if it doesn't exist
-    cursor.execute(
-        """ CREATE TABLE IF NOT EXISTS sentences (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        input TEXT,
-        prediction TEXT,
-        confidence DECIMAL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        entry_id INTEGER,
-        FOREIGN KEY (entry_id) REFERENCES entries(id))"""
-    )
-
-    # save the changes via
-    conn.commit()
-
-    # close the connection
-    conn.close()
-
-
-def save_feedback(text, predicted_distortion, user_correction, is_accepted, confidence, path=DATABASE_PATH) -> int:
-    conn = sqlite3.connect(path)
-    cursor = conn.cursor()
-
-    # add data point to feedback table
-    cursor.execute(
-        """ INSERT INTO feedback (text, predicted_distortion, user_correction, is_accepted, confidence)
-                   VALUES (?,?,?,?,?)""",
-        (text, predicted_distortion, user_correction, is_accepted, confidence),
-    )
-
-    # save changes
-    conn.commit()
-
-    # get the most recent row of feedback id
-    feedback_id = cursor.lastrowid
-
-    conn.close()
-
-    return feedback_id
-
-
-def retrieve_feedback(path=DATABASE_PATH):
-    conn = sqlite3.connect(path)
-    cursor = conn.cursor()
-
-    cursor.execute(""" SELECT * FROM feedback """)
-
-    table = cursor.fetchall()
-
-    conn.close()
-
-    return table
-
-
-def get_training_feedback(path=DATABASE_PATH):
-    conn = sqlite3.connect(path)
-    cursor = conn.cursor()
-    cursor.execute(
-        """ SELECT text, user_correction FROM feedback WHERE is_accepted IS FALSE AND used_in_training IS FALSE"""
-    )
-
-    table = cursor.fetchall()
-
-    conn.close()
-
-    return table
-
-
-def mark_used_feedback(path=DATABASE_PATH):
-    conn = sqlite3.connect(path)
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE feedback SET used_in_training=TRUE WHERE used_in_training=FALSE"
-    )
-    conn.commit()
-    conn.close()
-
-
-def save_model_version(version_number, training_samples, accuracy, notes, path=DATABASE_PATH):
-    conn = sqlite3.connect(path)
-    cursor = conn.cursor()
-
-    # add new version to model_versions table
-    cursor.execute(
-        """ INSERT INTO model_versions (version_number, training_samples, accuracy, notes)
-                   VALUES (?,?,?,?)""",
-        (version_number, training_samples, accuracy, notes),
-    )
-
-    # save changes
-    conn.commit()
-
-    # get the most recent row of model_versions
-    model_version_id = cursor.lastrowid
-
-    conn.close()
-
-    return model_version_id
-
-
-def get_latest_version(path=DATABASE_PATH):
-    conn = sqlite3.connect(path)
-    cursor = conn.cursor()
-    cursor.execute(""" SELECT MAX(version_number) FROM model_versions """)
-    version_number = cursor.fetchone()
-    conn.close()
-    if version_number[0] is None:
+    if not result.data:
         return 1
-    else:
-        return version_number[0]
+    return result.data[0]["version_number"]
+
 
 if __name__ == "__main__":
-    print("Initializing database...")
-    init_db()
-    print("Successfully initialized db")
+    print("Tables are created via the Supabase SQL Editor, not this script.")

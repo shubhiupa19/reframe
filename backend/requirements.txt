@@ -70,6 +70,7 @@ scipy==1.15.3
 sentence-transformers==5.4.1
 shellingham==1.5.4
 six==1.17.0
+supabase==2.31.0
 sympy==1.14.0
 threadpoolctl==3.6.0
 tokenizers==0.22.2

@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import traceback
 import re
-from database import save_feedback, init_db
+import uuid
+from database import save_feedback, save_prediction, init_db
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from transformers import pipeline
@@ -54,12 +54,23 @@ def predict():
         # Run all sentences through the DistilBERT classifier in one batched call
         predictions = classifier(sentences, truncation=True, max_length=256)
 
+        # Every sentence submitted in this request shares one submission_id, so they
+        # can be grouped back together later even without a user/auth system.
+        submission_id = str(uuid.uuid4())
+
         # Make predictions for each sentence
         results = []
         for i in range(len(sentences)):
             # top_k=None returns every class's score, sorted highest first
             top_prediction = predictions[i][0]
             confidence = float(top_prediction["score"])
+
+            # Log every prediction the model makes, not just the ones shown to the
+            # user below — logging failures shouldn't break the actual response.
+            try:
+                save_prediction(submission_id, sentences[i], top_prediction["label"], confidence)
+            except Exception as e:
+                print(f"Error saving prediction to database: {e}")
 
             if confidence > 0.2:
                 results.append({
@@ -91,12 +102,13 @@ def feedback():
             is_accepted=data.get("is_accepted"),
             confidence=data.get("confidence")
         )
+        return (jsonify({"feedback_id": feedback_id}))
     except Exception as e:
         return (jsonify({"error": str(e)}), 500)
         
 
 
-    return (jsonify({"feedback_id": feedback_id}))
+    
 
 # route to call the Gemini API to rewrite the journal entry in a healthier way
 @app.route('/rewrite', methods=['POST'])
@@ -130,51 +142,18 @@ def rewrite():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/agent', methods=["POST"])
-def agent():
-    tools = [
-        {
-            "name": "analyze_text",
-            "description": "Analyzes text for cognitive distortions sentence by sentence",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "text": {
-                        "type": "string",
-                        "description": "The journal entry text to analyze"
-                    }
-                },
-                "required": ["text"]
-            }
-        },
-        {
-            "name": "rewrite_text",
-            "description": "Rewrite distorted text in a healthier way using Gemini API",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "text": {"type": "string", "description": "The journal entry text"},
-                    "distortions": {
-                        "type": "array",
-                        "description": "List of detected distortions",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "input": {"type": "string"},
-                                "prediction": {"type": "string"},
-                                "confidence": {"type": "number"}
-                            }
-                        }
-                    }
-                },
-                "required": ["text", "distortions"]
-            }
-        }
-    ]
-
 @app.route('/health', methods=["GET"])
 def health():
-    classifier(["warmup"])
+    # Warms up the model so the first real /predict request doesn't pay the
+    # cost of PyTorch's slow first inference call. Logged (not returned in the
+    # response) so a failed warmup doesn't change this route's status code —
+    # the server itself is still up either way.
+    try:
+        classifier(["warmup"])
+        print("Model warmup succeeded")
+    except Exception as e:
+        print(f"Model warmup failed: {e}")
+
     return jsonify({"status": "ok"})
 
 

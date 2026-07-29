@@ -3,16 +3,24 @@ import os
 import sys
 from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.dirname(__file__))
+from fake_supabase import FakeSupabaseClient
 
 
-os.environ["API_KEY"] = "test-key"  # set before app loads                                                                                           
-                                                                                                                                                       
-from app import app                                                                                                                                  
-                  
+os.environ["API_KEY"] = "test-key"  # set before app loads
+
+from app import app
+import database
+
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # Every route that touches the database (predict logs predictions, feedback
+    # logs feedback) goes through database._get_client(), which just returns
+    # whatever database._client already is — patching that one attribute is
+    # enough to keep this whole suite from ever making a real Supabase call.
+    monkeypatch.setattr(database, "_client", FakeSupabaseClient())
     app.config["TESTING"] = True
-    with app.test_client() as client:                                                                                                                
+    with app.test_client() as client:
         yield client
                                                                                                                                                        
 def test_predict_returns_results(client):                                                                                                            

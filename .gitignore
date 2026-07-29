@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# claude project-level config directory
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -71,3 +74,4 @@ TODO.md
 
 # personal writing drafts, not part of the app
 /writing/
+

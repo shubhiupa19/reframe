@@ -36,6 +36,11 @@ jobs:
           git config --global user.name "GitHub Actions"
           git lfs install
           cd backend
+          # Only used locally by the retired train_embeddings_lr.py / tune_embeddings_lr.py
+          # scripts, never loaded by app.py — no reason to ship this 87MB directory to the
+          # deployed Space on every push. This only affects this CI runner's ephemeral
+          # checkout, not anyone's local copy.
+          rm -rf models/all-MiniLM-L6-v2
           git init -b main
           git lfs track "*.pkl" "*.safetensors"
           git add .
